@@ -24,7 +24,9 @@ class Autoloader
      */
     protected static $caseSensitivity = true;
 
-
+    /**
+     * @param $loader
+     */
     public static function register($loader)
     {
         spl_autoload_register($loader);
