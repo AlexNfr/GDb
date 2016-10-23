@@ -5,7 +5,8 @@
     require_once('../libs/Autoloader.php');
     spl_autoload_register([new Autoloader(), 'loadClass']);
 
-    $db = new Database('testDB', 'DB_user', '');
+    Database::set('testDB', 'DB_user', '');
+    $db = Database::getInstance();
     $cnt = $db->getRowCount();
     echo 'Открыли БД';
     var_dump($db, $cnt);

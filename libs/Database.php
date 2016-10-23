@@ -1,54 +1,97 @@
 <?php
 /**
  * Class Database - "Обертка" для работы с базами данных через класс PDO
- * ---------------------------------------------------------------------
+ * ---------------------------------------------------------------------------
  *
+ * @version 0.2.2016.10.22  - изменен подход использования класса (Singleton)
+ *                            добавлен универсальный построитель запросов
  * @version 0.1.2016.10.19  - первоначальная версия
  * @author  AlexNfr
  */
 class Database
 {
-    protected $connection = null;   // текущее соединение с БД
+    protected static $instance = null;  // экземпляр класса в режиме Singleton
 
-    protected $db_host;
-    protected $db_charset;
-    protected $db_driver;
-    protected $db_name;
-    protected $db_user;
-    protected $db_password;
+    protected $connection = null;       // соединение с БД
 
-    protected $db_Dsn;
-    protected $db_opt;
+    protected static $db_host;
+    protected static $db_charset;
+    protected static $db_driver;
+    protected static $db_name;
+    protected static $db_user;
+    protected static $db_password;
 
+    protected static $db_Dsn;
+    protected static $db_options;
+    protected static $db_errorMode;
+    protected static $db_defaultFetchMode;
+    protected static $db_emulatePrepares;
+
+    protected $query = '';          // текущий запрос построителя
     protected $statement = null;    // текущий подготовленный запрос
 
+    private function __construct() {}
+    private function __clone() {}
+    private function __wakeup() {}
+
     /**
-     * Создание соединения с БД
+     * Задание параметров соединения с БД
      *
      * @param $name
      * @param $user
      * @param $password
-     * @param string $host
-     * @param string $charset
-     * @param string $driver
+     * @param array $params
      */
-    public function __construct($name, $user, $password, $host = 'localhost', $charset = 'utf8', $driver = 'mysql')
+    public static function set($name, $user, $password, $params = [])
+
     {
-        $this->db_host = $host;
-        $this->db_charset = $charset;
-        $this->db_driver = $driver;
-        $this->db_name = $name;
-        $this->db_user = $user;
-        $this->db_password = $password;
+        if (!self::$instance) {
+            self::$db_host = (isset($params['host']) ? $params['host'] : 'localhost');
+            self::$db_charset = (isset($params['charset']) ? $params['charset'] : 'utf8');
+            self::$db_driver = (isset($params['driver']) ? $params['driver'] : 'mysql');
 
-        $this->db_Dsn = "{$this->db_driver}:host={$this->db_host};dbname={$this->db_name};charset={$this->db_charset}";
-        $this->db_opt  = [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => TRUE,
-        ];
+            self::$db_name = $name;
+            self::$db_user = $user;
+            self::$db_password = $password;
 
-        $this->connection = new PDO($this->db_Dsn, $this->db_user, $this->db_password, $this->db_opt);
+            self::$db_Dsn = self::$db_driver
+                            . ":host=" . self::$db_host
+                            . ";dbname=" . self::$db_name
+                            . ";charset=" . self::$db_charset;
+            self::$db_errorMode = (isset($params['errorMode']) ? $params['errorMode'] : PDO::ERRMODE_EXCEPTION);
+            self::$db_defaultFetchMode = (isset($params['defaultFetchMode']) ? $params['defaultFetchMode'] : PDO::FETCH_ASSOC);
+            self::$db_emulatePrepares = (isset($params['errmode']) ? $params['emulatePrepares'] : true);
+            self::$db_options = [
+                PDO::ATTR_ERRMODE => self::$db_errorMode,
+                PDO::ATTR_DEFAULT_FETCH_MODE => self::$db_defaultFetchMode,
+                PDO::ATTR_EMULATE_PREPARES => self::$db_emulatePrepares,
+            ];
+        }
+        return (!self::$instance);
+    }
+
+    /**
+     * @return Database
+     */
+    public static function getInstance()
+    {
+        return (self::$instance
+                ? self::$instance
+                : self::$instance = new static()
+        );
+    }
+
+    /**
+     * Получение текущего соединения
+     *
+     * @return $this->conn
+     */
+    public function getConnection()
+    {
+        return ($this->connection
+                ? $this->connection
+                : $this->connection = new PDO(self::$db_Dsn, self::$db_user, self::$db_password, self::$db_options)
+        );
     }
 
     /**
@@ -62,25 +105,17 @@ class Database
     }
 
     /**
-     * Получение текущего соединения
-     *
-     * @return $this->conn
-     */
-    public function getConnection()
-    {
-        return ($this->connection);
-    }
-
-    /**
      * Подготовка и выполнение запроса к БД
      *
      * @param $query
      * @return $this
      */
-    public function query($query, $params = [])
+    public function query($query = null, $params = [])
     {
-        $this->statement = $this->connection->prepare($query);
+        $query = ($query ? : $this->query);
+        $this->statement = $this->getConnection()->prepare($query);
         $this->statement->execute($params);
+        $this->query = '';
         return ($this);
     }
 
@@ -180,11 +215,24 @@ class Database
                     $objects[] = $this->statement->fetchObject();
                 }
             }
-
             return ($objects);
         } else {
             return (null);
         }
+    }
+
+    public function __call($name, $params)
+    {
+        $args = '';
+        foreach ($params as $param) {
+            if (is_string($param)) {
+                $args .= ' ' . $param;
+            } else if (is_array($param)) {
+                $args .= ' ' . implode(', ', $param);
+            }
+        }
+        $this->query .= $name . $args . ' ';
+        return ($this);
     }
 
 }
