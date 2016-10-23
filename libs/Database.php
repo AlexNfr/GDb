@@ -99,7 +99,8 @@ class Database
      *
      * @return $this
      */
-    public function destroy(){
+    public function destroy()
+    {
         $this->connection = null;
         return ($this);
     }
@@ -221,6 +222,13 @@ class Database
         }
     }
 
+    /**
+     * Вызов функций построения запроса к БД - одноименных ключевым словам SQL
+     *
+     * @param $name
+     * @param $params
+     * @return Database
+     */
     public function __call($name, $params)
     {
         $args = '';
